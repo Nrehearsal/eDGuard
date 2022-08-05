@@ -141,13 +141,11 @@ func (tm *TaskManager) Start(ctx context.Context) error {
 
 	klog.Infof("ready")
 
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case err := <-tm.errCh:
-			return err
-		}
+	select {
+	case <-ctx.Done():
+		return nil
+	case err := <-tm.errCh:
+		return err
 	}
 }
 

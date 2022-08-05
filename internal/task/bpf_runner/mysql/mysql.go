@@ -10,7 +10,6 @@ import (
 	"eDGuard/internal/task/bpf_runner"
 	"eDGuard/pkg/cri"
 	"eDGuard/pkg/tool"
-	"errors"
 	"fmt"
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
@@ -100,8 +99,7 @@ func (r *BpfRunner) Start(ctx context.Context) error {
 		case t := <-r.ch:
 			r.attachInstance(t)
 		case err := <-r.internalErrChan:
-			return err
-		default:
+			klog.Errorf("[%s] has error: %s", err)
 		}
 	}
 }
@@ -132,6 +130,7 @@ func (r *BpfRunner) attachInstance(t db.Interface) {
 
 	if err := r.clusters.Update(uint32(t.GetPid()), &cluster, ebpf.UpdateAny); err != nil {
 		r.internalErrChan <- err
+		return
 	}
 
 	if !bpfProgram.Attached {
@@ -145,9 +144,9 @@ func (r *BpfRunner) detachInstance(id string) {
 	defer r.mu.Unlock()
 
 	if t, exists := r.Instances[id]; exists {
-		err := r.clusters.Delete(uint32(t.GetPid()))
-		if !errors.Is(err, ebpf.ErrKeyNotExist) {
+		if err := r.clusters.Delete(uint32(t.GetPid())); err != nil {
 			r.internalErrChan <- err
+			return
 		}
 		delete(r.Instances, id)
 	}
@@ -158,14 +157,11 @@ func (r *BpfRunner) attach(ctx context.Context, pid int, program *bpf.Program) {
 
 	klog.Infof("[%s][%s] attach ebpf program", r.Kind, program.Version)
 
-	program.Attached = true
-
 	binPath := fmt.Sprintf("/proc/%d/exe", pid)
 
 	// Open an ELF binary and read its symbols.
 	ex, err := link.OpenExecutable(binPath)
 	if err != nil {
-		klog.Errorf("[%s][%s] opening executable failed: %s", r.Kind, program.Version, err)
 		r.internalErrChan <- err
 		return
 	}
@@ -174,7 +170,6 @@ func (r *BpfRunner) attach(ctx context.Context, pid int, program *bpf.Program) {
 	// the pre-compiled eBPF program to it.
 	up, err := ex.Uprobe("_[BY_OFFSET]_", program.Upp, &link.UprobeOptions{Offset: program.Properties[31]})
 	if err != nil {
-		klog.Errorf("[%s][%s] creating uprobe: %s", r.Kind, program.Version, err)
 		r.internalErrChan <- err
 		return
 	}
@@ -182,18 +177,17 @@ func (r *BpfRunner) attach(ctx context.Context, pid int, program *bpf.Program) {
 
 	urp, err := ex.Uretprobe("_[BY_OFFSET]_", program.Urpp, &link.UprobeOptions{Offset: program.Properties[31]})
 	if err != nil {
-		klog.Errorf("[%s][%s] creating uretprobe: %s", r.Kind, program.Version, err)
 		r.internalErrChan <- err
 		return
 	}
 	defer urp.Close()
 
-	for {
-		select {
-		case <-ctx.Done():
-			klog.Infof("[%s][%s] un-attach ebpf program due to context done", r.Kind, program.Version)
-			return
-		}
+	program.Attached = true
+
+	select {
+	case <-ctx.Done():
+		klog.Infof("[%s][%s] un-attach ebpf program due to context done", r.Kind, program.Version)
+		return
 	}
 }
 
@@ -236,12 +230,12 @@ func (r *BpfRunner) onPodUpdate(old, new interface{}) {
 
 		pid, err := r.criClient.GetContainerPid(containerId)
 		if err != nil {
-			klog.Errorf("[%s][%s][%s] inspect container failed: %s", r.Kind, pod.Name, id, err)
+			r.internalErrChan <- err
 			break
 		}
 		pid, err = tool.GetChildPid(pid)
 		if err != nil {
-			klog.Errorf("[%s][%s][%s] get child pid for process[%d] failed: %s", r.Kind, pod.Name, id, pid, err)
+			r.internalErrChan <- err
 			break
 		}
 
