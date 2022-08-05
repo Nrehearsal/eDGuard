@@ -1,0 +1,20 @@
+package tool
+
+import "testing"
+
+func TestS2B(t *testing.T) {
+	s := "radondb-htd985-mysql-0"
+	bs := S264B(s)
+	t.Log(len(bs))
+	t.Log(bs)
+
+	s = ""
+	bs = S264B(s)
+	t.Log(len(bs))
+	t.Log(bs)
+
+	s = "111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111"
+	bs = S264B(s)
+	t.Log(len(bs))
+	t.Log(bs)
+}

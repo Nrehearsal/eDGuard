@@ -1,0 +1,80 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: e-dguard
+  namespace: dmp-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: e-dguard-role
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - get
+      - list
+      - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: e-dguard-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: e-dguard-role
+subjects:
+  - kind: ServiceAccount
+    name: e-dguard
+    namespace: dmp-system
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: e-dguard
+  namespace: dmp-system
+spec:
+  selector:
+    matchLabels:
+      k8s-app: e-dguard
+  template:
+    metadata:
+      labels:
+        k8s-app: e-dguard
+    spec:
+      hostPID: true
+      containers:
+        - command:
+            - /eDGuard
+          env:
+            - name: MY_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: spec.nodeName
+            - name: CRI_NAME
+              value: docker
+          image: larryhuang142/e-dguard:v0.1
+          imagePullPolicy: IfNotPresent
+          name: e-dguard-agent
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - mountPath: /sys/fs/bpf
+              mountPropagation: Bidirectional
+              name: bpf-maps
+            - mountPath: /var/run/cri.sock
+              name: cri-socket
+      serviceAccountName: e-dguard
+      volumes:
+        - hostPath:
+            path: /var/run/docker.sock
+          name: cri-socket
+        - hostPath:
+            path: /sys/fs/bpf
+            type: DirectoryOrCreate
+          name: bpf-maps
