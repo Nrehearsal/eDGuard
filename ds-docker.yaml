@@ -58,7 +58,7 @@ spec:
                   fieldPath: spec.nodeName
             - name: CRI_NAME
               value: docker
-          image: larryhuang142/e-dguard:v0.1
+          image: larryhuang142/e-dguard:v0.3
           imagePullPolicy: IfNotPresent
           name: e-dguard-agent
           securityContext:

@@ -4,7 +4,7 @@ import (
 	"context"
 	"eDGuard/internal/db"
 	"k8s.io/client-go/informers"
-	"log"
+	"k8s.io/klog/v2"
 )
 
 // runnables handles all the runnables for a manager by grouping them accordingly to their
@@ -59,11 +59,11 @@ func (r *runnables) Add(fn Runnable) error {
 		return r.Caches.Add(fn, func(ctx context.Context) bool {
 			for informerType, ok := range runnable.GetSharedInformerFactory().WaitForCacheSync(ctx.Done()) {
 				if !ok {
-					log.Fatalf("failed to sync cache for %v", informerType)
+					klog.Fatalf("failed to sync cache for %v", informerType)
 					return false
 				}
 			}
-			log.Printf("sync cache done")
+			klog.Info("sync cache done")
 			return true
 		})
 	case pumpRunner:

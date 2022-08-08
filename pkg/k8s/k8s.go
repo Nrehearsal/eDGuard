@@ -2,7 +2,7 @@ package k8s
 
 import (
 	"k8s.io/client-go/kubernetes"
-	"log"
+	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
@@ -12,7 +12,7 @@ var err error
 func init() {
 	k8sClient, err = kubernetes.NewForConfig(ctrl.GetConfigOrDie())
 	if err != nil {
-		log.Fatal(err, "setup k8s client failed")
+		klog.Fatal(err, "setup k8s client failed")
 	}
 }
 
